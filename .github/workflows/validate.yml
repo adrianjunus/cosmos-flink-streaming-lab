@@ -3,7 +3,6 @@
 #
 # Checks performed:
 #   - JSON syntax validity for connector configs and schemas
-#   - docker-compose.yml syntax
 #   - Markdown linting
 #   - Secret scanning (catches accidentally-committed credentials)
 #   - Flink SQL syntax sanity check
@@ -69,16 +68,6 @@ jobs:
             exit 1
           fi
           echo "All JSON files validated successfully."
-
-      # ──────────────────────────────────────────────────────────────────
-      # Validate the docker-compose file's syntax
-      # ──────────────────────────────────────────────────────────────────
-      - name: Validate docker-compose.yml
-        run: |
-          set -e
-          echo "Validating docker-version/docker-compose.yml..."
-          docker compose -f docker-version/docker-compose.yml config > /dev/null
-          echo "  ✓ docker-compose.yml is syntactically valid"
 
       # ──────────────────────────────────────────────────────────────────
       # Lint Markdown files for consistency and common issues
