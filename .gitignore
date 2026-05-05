@@ -1,0 +1,71 @@
+# ─── Secrets — NEVER commit ─────────────────────────────────────────
+.env
+.env.*
+*.pem
+*.key
+*-credentials.*
+*-secret.*
+*-secrets.*
+secrets/
+credentials/
+
+# Connector configs with real values (commit only .example.json variants)
+**/connector-config/*.json
+!**/connector-config/*.example.json
+
+# Confluent CLI state
+.confluent/
+
+# Azure CLI state
+.azure/
+
+# ─── OS junk ────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ─── IDE / editor ───────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# ─── Docker ─────────────────────────────────────────────────────────
+docker-volumes/
+*.log
+
+# ─── Java / Flink / Kafka build artifacts ───────────────────────────
+target/
+*.class
+*.jar
+!flink/lib/*.jar
+.gradle/
+build/
+
+# ─── Python (in case any tooling scripts get added) ────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+
+# ─── Node (in case any UI or tooling gets added) ───────────────────
+node_modules/
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+
+# ─── Misc ───────────────────────────────────────────────────────────
+*.tmp
+*.bak
+*.orig

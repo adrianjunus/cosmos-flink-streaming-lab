@@ -1,0 +1,59 @@
+{
+    "properties": {
+      "_attachments": {
+        "connect.index": 8,
+        "type": "string"
+      },
+      "_etag": {
+        "connect.index": 7,
+        "type": "string"
+      },
+      "_lsn": {
+        "connect.index": 11,
+        "connect.type": "int64",
+        "type": "integer"
+      },
+      "_rid": {
+        "connect.index": 5,
+        "type": "string"
+      },
+      "_self": {
+        "connect.index": 6,
+        "type": "string"
+      },
+      "_touch": {
+        "connect.index": 9,
+        "connect.type": "int64",
+        "type": "integer"
+      },
+      "_ts": {
+        "connect.index": 10,
+        "connect.type": "int64",
+        "type": "integer"
+      },
+      "amount": {
+        "connect.index": 2,
+        "connect.type": "float64",
+        "type": "number"
+      },
+      "customerId": {
+        "connect.index": 1,
+        "type": "string"
+      },
+      "id": {
+        "connect.index": 0,
+        "type": "string"
+      },
+      "items": {
+        "connect.index": 3,
+        "connect.type": "int64",
+        "type": "integer"
+      },
+      "ts": {
+        "connect.index": 4,
+        "type": "string"
+      }
+    },
+    "title": "inferred_name_1031082650",
+    "type": "object"
+  }

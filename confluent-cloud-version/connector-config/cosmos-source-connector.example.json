@@ -1,0 +1,88 @@
+{
+  "connector": {
+    "id": "[REDACTED]",
+    "name": "CosmosDbSourceV2Connector_0",
+    "status": "PAUSED",
+    "type": "source"
+  },
+  "tasks": [
+    {
+      "task": 0,
+      "state": "STOPPED"
+    }
+  ],
+  "configs": [
+    {
+      "config": "azure.cosmos.account.key",
+      "value": "[REDACTED]"
+    },
+    {
+      "config": "cloud.environment",
+      "value": "prod"
+    },
+    {
+      "config": "kafka.endpoint",
+      "value": "SASL_SSL://pkc-6vz38.westus2.azure.confluent.cloud:9092"
+    },
+    {
+      "config": "kafka.region",
+      "value": "westus2"
+    },
+    {
+      "config": "azure.cosmos.source.containers.includedList",
+      "value": "orders"
+    },
+    {
+      "config": "azure.cosmos.source.containers.topicMap",
+      "value": "cosmos.orders#orders"
+    },
+    {
+      "config": "kafka.auth.mode",
+      "value": "KAFKA_API_KEY"
+    },
+    {
+      "config": "output.data.format",
+      "value": "JSON_SR"
+    },
+    {
+      "config": "azure.cosmos.account.endpoint",
+      "value": "https://[REDACTED].documents.azure.com:443/"
+    },
+    {
+      "config": "connector.class",
+      "value": "CosmosDbSourceV2"
+    },
+    {
+      "config": "errors.tolerance",
+      "value": "all"
+    },
+    {
+      "config": "kafka.api.key",
+      "value": "[REDACTED]"
+    },
+    {
+      "config": "kafka.api.secret",
+      "value": "[REDACTED]"
+    },
+    {
+      "config": "name",
+      "value": "CosmosDbSourceV2Connector_0"
+    },
+    {
+      "config": "tasks.max",
+      "value": "1"
+    },
+    {
+      "config": "authentication.method",
+      "value": "Master Key"
+    },
+    {
+      "config": "azure.cosmos.source.database.name",
+      "value": "lab"
+    },
+    {
+      "config": "cloud.provider",
+      "value": "azure"
+    }
+  ]
+}
