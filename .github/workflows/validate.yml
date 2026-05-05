@@ -1,0 +1,147 @@
+# Validates the repo's static artifacts on every push and pull request.
+# This is real CI that runs against this repo. It does not deploy anything.
+#
+# Checks performed:
+#   - JSON syntax validity for connector configs and schemas
+#   - docker-compose.yml syntax
+#   - Markdown linting
+#   - Secret scanning (catches accidentally-committed credentials)
+#   - Flink SQL syntax sanity check
+#
+# A more complete production CI/CD would also include schema compatibility
+# checks against a real Schema Registry — see schema-compatibility-check.yml
+# for an illustrative example of what that would look like.
+
+name: Validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    name: Static validation
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          # Full history is needed for secret scanning to compare against base
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # ──────────────────────────────────────────────────────────────────
+      # Validate JSON files (connector configs, schemas, etc.)
+      # ──────────────────────────────────────────────────────────────────
+      - name: Validate JSON files
+        run: |
+          set -e
+          echo "Scanning for JSON files to validate..."
+          json_files=$(find . -type f -name '*.json' \
+            -not -path './node_modules/*' \
+            -not -path './.git/*')
+
+          if [ -z "$json_files" ]; then
+            echo "No JSON files found to validate."
+            exit 0
+          fi
+
+          failed=0
+          for f in $json_files; do
+            if python -m json.tool "$f" > /dev/null 2>&1; then
+              echo "  ✓ $f"
+            else
+              echo "  ✗ $f (invalid JSON)"
+              python -m json.tool "$f" || true
+              failed=1
+            fi
+          done
+
+          if [ "$failed" -eq 1 ]; then
+            echo "::error::One or more JSON files failed validation"
+            exit 1
+          fi
+          echo "All JSON files validated successfully."
+
+      # ──────────────────────────────────────────────────────────────────
+      # Validate the docker-compose file's syntax
+      # ──────────────────────────────────────────────────────────────────
+      - name: Validate docker-compose.yml
+        run: |
+          set -e
+          echo "Validating docker-version/docker-compose.yml..."
+          docker compose -f docker-version/docker-compose.yml config > /dev/null
+          echo "  ✓ docker-compose.yml is syntactically valid"
+
+      # ──────────────────────────────────────────────────────────────────
+      # Lint Markdown files for consistency and common issues
+      # ──────────────────────────────────────────────────────────────────
+      - name: Lint Markdown
+        uses: DavidAnson/markdownlint-cli2-action@v16
+        with:
+          globs: |
+            **/*.md
+            !node_modules
+        continue-on-error: true  # Markdown lint is informational, not blocking
+
+      # ──────────────────────────────────────────────────────────────────
+      # Scan for accidentally-committed secrets
+      # This is the most important check for a public repo.
+      # ──────────────────────────────────────────────────────────────────
+      - name: Scan for secrets with TruffleHog
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --results=verified,unknown
+
+      # ──────────────────────────────────────────────────────────────────
+      # Sanity check Flink SQL files exist and are non-empty
+      # A real production setup would parse these with the Flink SQL parser.
+      # ──────────────────────────────────────────────────────────────────
+      - name: Check Flink SQL files
+        run: |
+          set -e
+          echo "Checking Flink SQL files..."
+          sql_files=$(find . -type f -name '*.sql')
+
+          if [ -z "$sql_files" ]; then
+            echo "::warning::No SQL files found"
+            exit 0
+          fi
+
+          for f in $sql_files; do
+            if [ -s "$f" ]; then
+              # Check for obvious required keywords
+              if grep -qiE 'CREATE TABLE|INSERT INTO|SELECT' "$f"; then
+                echo "  ✓ $f"
+              else
+                echo "  ⚠ $f (no recognized SQL keywords)"
+              fi
+            else
+              echo "  ✗ $f (empty file)"
+              exit 1
+            fi
+          done
+
+  summary:
+    needs: validate
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Validation summary
+        run: |
+          if [ "${{ needs.validate.result }}" == "success" ]; then
+            echo "✅ All validation checks passed"
+          else
+            echo "❌ One or more validation checks failed"
+            exit 1
+          fi

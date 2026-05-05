@@ -195,6 +195,154 @@ These are all productive next steps that build on what's already in the repo wit
 
 ---
 
+## How this would be productionized
+
+The repo as it stands is a learning artifact: configuration files, SQL, and documentation. There's no "code" to deploy in the traditional sense. But if I were extending this lab into a production system at a real company, here's the CI/CD and operational tooling I would build, layer by layer.
+
+### What gets versioned
+
+In production, each of these would live in Git, with its own deployment pipeline:
+
+- **Schema definitions** — Avro `.avsc` or JSON Schema files, one per topic subject
+- **Connector configurations** — JSON, with secrets templated as `${VAR}` references
+- **Flink SQL or Flink jobs** — declarative SQL files for simple pipelines, or Java/Python source for jobs needing the DataStream API
+- **Topic definitions** — partition counts, retention, compatibility modes — typically as Terraform
+- **Infrastructure** — Confluent Cloud cluster, Cosmos DB account, Flink compute pool — Terraform or Bicep
+- **Observability artifacts** — Grafana dashboard JSON, alert configs, runbooks
+
+The repo itself becomes a polyrepo or monorepo with these as distinct concerns, each with its own deployment story.
+
+### Schema CI/CD: the most important layer
+
+Schemas are the contract surface between producers and consumers, and schema changes are the most common cause of pipeline breakage. Schema CI catches at PR time the same kinds of `BACKWARD` compatibility errors that this lab encountered at runtime.
+
+**On every pull request:**
+
+- Validate JSON Schema or Avro syntax
+- Pull the currently registered version from Schema Registry
+- Run `compatibility check`: would the proposed schema be compatible with the registered one under the subject's compatibility mode?
+- Fail the build with a clear error if any incompatibility is found
+- Post the diff and the compatibility result as a PR comment for reviewer visibility
+
+**On merge to main:**
+
+- Register each updated schema as a new version with Schema Registry
+- Tag the Git commit with the registered version IDs for traceability
+
+The `.github/workflows/schema-compatibility-check.yml` file in this repo is an illustrative scaffold of what this workflow looks like.
+
+### Connector config CI/CD
+
+**On pull request:**
+
+- Validate JSON syntax
+- Lint for common mistakes — wrong converter classes, missing required properties, topic name conventions
+- Optionally dry-run against a non-prod Connect cluster
+
+**On deploy:**
+
+- Resolve secret references from Azure Key Vault (or equivalent)
+- Submit to Connect REST API: create or update the connector
+- Wait for the connector to reach `RUNNING` status — but more importantly, verify each individual task is `RUNNING`. The lab demonstrated that connector status alone is misleading; tasks can fail silently while the connector reports healthy.
+- Fail the deploy if tasks don't reach a healthy state within a timeout
+
+### Flink job CI/CD
+
+For declarative SQL pipelines:
+
+- Parse the SQL with Flink's SQL parser to catch syntax errors at PR time
+- Optionally deploy to a staging compute pool for integration testing against synthetic data
+- Validate that referenced topics exist with compatible schemas
+
+For stateful streaming jobs, deployment requires care that stateless services don't:
+
+- **Take a savepoint of the running job** — a consistent snapshot of all operator state plus Kafka offsets
+- **Deploy the new version** — submit the new job
+- **Restore the new job from the savepoint** — preserves accumulated state, resumes from the same Kafka position
+- **Verify the new statement is processing records** before considering the deploy successful
+
+This savepoint dance is the most distinctive part of streaming CI/CD versus stateless service CI/CD. Flink jobs accumulate state over time (windowed aggregations, deduplication sets, join hash tables). You can't just kill and replace them without losing that state — savepoints are the mechanism for state migration across job versions.
+
+### Infrastructure CI/CD
+
+Terraform with a state backend (Azure Storage Account for the state file, locked via blob lease):
+
+- `terraform plan` runs on every PR, with the plan posted as a PR comment so reviewers see what would change
+- `terraform apply` runs on merge to main, gated by environment
+- Multi-environment promotion: changes flow dev → staging → prod with explicit approval gates between stages
+- Cost estimation (e.g., Infracost) runs on every PR to catch unintended expensive changes
+- Destructive change detection: any `terraform plan` showing resource destruction in production triggers manual review
+
+Confluent Cloud has a mature Terraform provider; Azure Cosmos DB does too. Both are well-supported.
+
+### Secret management
+
+Secrets never live in Git. The pattern across all layers:
+
+- Connector configs reference `${COSMOS_MASTER_KEY}` rather than embedding the key
+- Deployment-time substitution pulls from Azure Key Vault (or AWS Secrets Manager, GitHub Secrets, HashiCorp Vault)
+- Confluent Cloud's native secrets management can also store these directly, with the CLI/API substituting at connector creation time
+- Rotation is automated: keys regenerate on a schedule, and connectors pick up new values via redeploy
+
+If a secret is ever committed accidentally, the recovery is two-part: rotate the secret in the source system *first*, then remove from Git history. By the time you've removed a leaked secret from a public repo, scanners and bots may have already harvested it.
+
+### Observability deploys with code
+
+Often forgotten in CI/CD discussions but critical for streaming systems: the dashboards, alerts, and runbooks that operators rely on must deploy alongside the code that produces the metrics.
+
+- Grafana dashboard JSON in Git, deployed via the Grafana API
+- Alert configurations (Prometheus AlertManager, PagerDuty, Datadog) versioned and deployed
+- Runbooks (Markdown in Git) linked from alert payloads so on-call engineers can find them quickly
+
+When a new metric is added in a Flink job, the dashboard update and alert update should land in the same PR. Otherwise the metric exists but no one sees it.
+
+### Environment promotion
+
+The standard pattern: dev → staging → prod, with each environment having its own:
+
+- Confluent Cloud organization or environment
+- Azure Cosmos DB account
+- Flink compute pool
+- Schema Registry (or at minimum, separate subjects per environment)
+
+Schema changes promote first to dev with `NONE` compatibility for fast iteration, then to staging with `BACKWARD` to mirror production rules, then to production with manual approval. A schema change that fails compatibility in staging never reaches production.
+
+### Canary deployments for stateful jobs
+
+The most sophisticated production pattern, worth knowing about even if rarely implemented:
+
+- Run the new version of a Flink job in parallel with the old one
+- Both consume from the same source topic
+- Both write to separate output topics
+- Reconciliation queries compare outputs for a soak period
+- When confidence is high, cut downstream consumers over to the new output
+
+Hard to do well — requires careful key partitioning, deduplication on the cut-over, and good reconciliation tooling. Most teams use simpler blue-green via savepoints. But canary is the gold standard for high-stakes stateful changes.
+
+### Data contracts: the emerging pattern
+
+Beyond schemas, the industry is moving toward formal **data contracts** between producer and consumer teams. A contract includes:
+
+- Schema (the syntactic interface)
+- Semantic meaning (what does each field represent, what are the allowed values)
+- SLAs (latency, completeness, freshness commitments)
+- Lifecycle commitments (deprecation policy, breaking change process)
+- Ownership (who to contact, escalation path)
+
+These live in Git alongside schemas, get registered in a contract registry, and are validated in CI. Confluent and other vendors are building tooling around this. For a streaming pipeline at any meaningful scale, this is where the industry is heading.
+
+### What this repo demonstrates about productionization
+
+Even though this repo doesn't deploy anything, the architecture documentation and CI workflows in it demonstrate awareness of the production patterns:
+
+- The validation workflow (`.github/workflows/validate.yml`) catches the basic class of issues (broken JSON, accidentally committed secrets, malformed compose files) at PR time
+- The illustrative schema check workflow shows the most important production-specific CI pattern
+- This document captures the end-to-end thinking about how a learning artifact would mature into a production system
+
+The honest framing: this is documentation of how I'd productionize a streaming pipeline, paired with a working learning lab that exercises the underlying technologies. The repo is intentionally not pretending to be production code.
+
+---
+
 ## Summary of architectural decisions
 
 | Decision | Choice | Reasoning |

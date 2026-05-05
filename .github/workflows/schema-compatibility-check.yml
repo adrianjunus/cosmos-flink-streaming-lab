@@ -1,0 +1,113 @@
+# ─────────────────────────────────────────────────────────────────────────
+# ILLUSTRATIVE WORKFLOW — does not run by default
+# ─────────────────────────────────────────────────────────────────────────
+#
+# This workflow demonstrates how schema compatibility checking would work
+# in a production version of this architecture, where schemas live in Git
+# and are registered with a real Confluent Cloud Schema Registry.
+#
+# It is set to `workflow_dispatch` (manual trigger) only, because:
+#   1. This repo has no live Schema Registry to check against
+#   2. Running it requires real Schema Registry credentials as secrets
+#   3. It's here as a reference / portfolio artifact, not active CI
+#
+# To make this work for real:
+#   1. Add the following secrets in the repo Settings → Secrets:
+#        SCHEMA_REGISTRY_URL
+#        SCHEMA_REGISTRY_API_KEY
+#        SCHEMA_REGISTRY_API_SECRET
+#   2. Change the trigger from `workflow_dispatch` to `pull_request`
+#      with a path filter on the schemas/ directory
+#   3. Ensure the schema files in confluent-cloud-version/schemas/ are
+#      named to match the subjects they represent
+#
+# This is the most important CI check for a streaming pipeline, because
+# schema compatibility violations are the most common cause of pipeline
+# breakage — and the failure mode is silent record drops, not loud errors.
+# Catching them at PR time prevents the "connector RUNNING but no data
+# flowing" failure mode at runtime.
+#
+# ─────────────────────────────────────────────────────────────────────────
+
+name: Schema Compatibility Check (Illustrative)
+
+on:
+  workflow_dispatch:  # Manual trigger only — see comments above
+  # In production, this would be:
+  # pull_request:
+  #   paths:
+  #     - 'confluent-cloud-version/schemas/**'
+
+jobs:
+  check-compatibility:
+    runs-on: ubuntu-latest
+    name: Validate schema changes against Schema Registry
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Confluent CLI
+        run: |
+          curl -sL --http1.1 https://cnfl.io/cli | sh -s -- -b /usr/local/bin
+          confluent --version
+
+      - name: Authenticate to Confluent Cloud
+        env:
+          CONFLUENT_CLOUD_API_KEY: ${{ secrets.SCHEMA_REGISTRY_API_KEY }}
+          CONFLUENT_CLOUD_API_SECRET: ${{ secrets.SCHEMA_REGISTRY_API_SECRET }}
+        run: |
+          # In production: log in to Confluent Cloud here
+          echo "Would authenticate using stored API key/secret"
+
+      - name: Run compatibility check on each schema
+        env:
+          SR_URL: ${{ secrets.SCHEMA_REGISTRY_URL }}
+          SR_KEY: ${{ secrets.SCHEMA_REGISTRY_API_KEY }}
+          SR_SECRET: ${{ secrets.SCHEMA_REGISTRY_API_SECRET }}
+        run: |
+          set -e
+          echo "Checking schema compatibility..."
+
+          for schema_file in confluent-cloud-version/schemas/*.json; do
+            # Skip the README in the schemas folder
+            [ "$(basename "$schema_file")" = "README.md" ] && continue
+
+            # Derive the subject name from the file name
+            # e.g., cosmos.orders-value.v4.json → cosmos.orders-value
+            subject=$(basename "$schema_file" .json | sed 's/\.v[0-9]*$//')
+
+            echo ""
+            echo "Subject: $subject"
+            echo "File:    $schema_file"
+
+            # In production, this would call the Schema Registry compatibility API:
+            #
+            # confluent schema-registry schema check-compatibility \
+            #   --schema "$schema_file" \
+            #   --subject "$subject" \
+            #   --type JSON \
+            #   --schema-registry-endpoint "$SR_URL" \
+            #   --schema-registry-api-key "$SR_KEY" \
+            #   --schema-registry-api-secret "$SR_SECRET"
+            #
+            # The CLI exits non-zero if the schema is incompatible.
+
+            echo "  (Illustrative — would check compatibility against subject's latest registered version)"
+          done
+
+          echo ""
+          echo "All schemas checked. In a real run, any incompatibility would fail this step."
+
+      - name: Comment on PR with results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '✅ Schema compatibility check passed against Schema Registry.\n\n' +
+                    'All proposed schema changes are compatible with their currently registered versions.'
+            })

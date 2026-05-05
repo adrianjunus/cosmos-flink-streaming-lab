@@ -1,5 +1,7 @@
 # cosmos-flink-streaming-lab
 
+![Validate](https://github.com/adrianjunus/cosmos-flink-streaming-lab/actions/workflows/validate.yml/badge.svg)
+
 A hands-on exploration of real-time streaming analytics on Azure: ingesting Cosmos DB change feed events through Apache Kafka and processing them with Apache Flink. Built as a personal learning project to understand the architecture, tradeoffs, and failure modes of production streaming systems.
 
 The lab exists in two forms:
@@ -143,6 +145,18 @@ Beyond getting a streaming pipeline working, the project covers a number of arch
 - **Trade-offs between JSON Schema and Avro for streaming serialization.** When the per-record re-inference behavior of the JSON Schema converter creates compatibility headaches, and why Avro is typically preferred for high-evolution streaming workloads despite being less debuggable.
 
 The reasoning behind each of these is in [`docs/architecture.md`](docs/architecture.md).
+
+---
+
+## CI/CD
+
+The repo includes two GitHub Actions workflows:
+
+- **`.github/workflows/validate.yml`** runs on every push and pull request. It validates JSON syntax across connector configs and schemas, checks the `docker-compose.yml` for syntax errors, lints Markdown for consistency, scans for accidentally-committed secrets, and sanity-checks the Flink SQL files. This is real CI that runs against the repo.
+
+- **`.github/workflows/schema-compatibility-check.yml`** is an illustrative scaffold of how schema compatibility checking against a real Schema Registry would work in a production version of this architecture. It's set to manual trigger only because the repo has no live Schema Registry to validate against. The file documents how it would be wired up if connected to a real registry.
+
+The architecture doc's "How this would be productionized" section walks through the full CI/CD picture for a production streaming pipeline — schema management, connector deploys, savepoint-based Flink job migration, infrastructure-as-code, and secret management.
 
 ---
 
