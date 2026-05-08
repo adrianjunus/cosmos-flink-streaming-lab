@@ -4,12 +4,7 @@
 
 A hands-on exploration of real-time streaming analytics on Azure: ingesting Cosmos DB change feed events through Apache Kafka and processing them with Apache Flink. Built as a personal learning project to understand the architecture, tradeoffs, and failure modes of production streaming systems.
 
-The lab exists in two forms:
-
-- **`docker-version/`** — the entire stack on a local laptop using Docker Compose. Useful for understanding what each component does without a managed-service abstraction.
 - **`confluent-cloud-version/`** — the same architecture on Confluent Cloud's managed Flink and Kafka offerings, hosted on Azure. Closer to production reality.
-
-Both versions implement the same architecture against the same Cosmos DB source.
 
 ---
 
@@ -42,13 +37,11 @@ Cosmos DB acts as the operational data store. Its change feed emits an event for
 
 ---
 
-## Why these technologies fit together
+## Why this architecture
 
-The interesting question isn't "how do you wire these tools together" — it's "why are these the right tools, and what would go wrong if you used databases or batch processing instead?" Three architectural ideas drive the choices:
+**Kafka as a durable event log, not a buffer.** A traditional database (Postgres, even Cosmos itself) is optimized for storing current state and answering point queries. Kafka is optimized for sequential append at high throughput, multiple independent consumers reading at their own pace, replay from arbitrary offsets, and aging out old data via retention. Trying to serve a streaming workload from a database creates contention between writers and readers, expensive replay queries, and brittle multi-consumer fan-out. I chose Kafka as it was designed for exactly this shape of workload with the necessary quality of life features in mind.
 
-**Kafka as a durable event log, not a buffer.** A traditional database (Postgres, even Cosmos itself) is optimized for storing current state and answering point queries. Kafka is optimized for sequential append at high throughput, multiple independent consumers reading at their own pace, replay from arbitrary offsets, and aging out old data via retention. Trying to serve a streaming workload from a database creates contention between writers and readers, expensive replay queries, and brittle multi-consumer fan-out. Kafka was designed for exactly this shape of workload.
-
-**Flink as streaming-native compute, not micro-batch.** Flink processes records one at a time through its operator graph, maintains operator state as a first-class concern, supports event-time watermarks for handling out-of-order events, and provides exactly-once semantics through coordinated checkpointing of state and Kafka offsets. Spark Structured Streaming can do similar work in micro-batch mode, but Flink's streaming-first runtime is better suited to low-latency stateful workloads. The two are competing engines, not layered ones.
+**Flink as streaming-native compute, not micro-batch.** Flink processes records one at a time through its operator graph, maintains operator state as a first-class concern, supports event-time watermarks for handling out-of-order events, and provides exactly-once semantics through coordinated checkpointing of state and Kafka offsets. I formerly used much of Spark Structured Streaming which can do similar work in micro-batch mode, but Flink's streaming-first runtime is better suited to low-latency stateful workloads. The two are competing engines, not layered ones.
 
 **Cosmos change feed as a replayable source of truth.** The change feed retains a configurable window of every change, which means recovery from downstream errors usually means "fix the code and replay from source," not "manually reconstruct lost data." This makes retention windows — both at Cosmos and in Kafka — a first-class architectural decision rather than a cost-only knob.
 
@@ -64,13 +57,6 @@ cosmos-flink-streaming-lab/
 ├── README.md                              ← You are here
 ├── LICENSE                                ← MIT
 ├── .gitignore
-│
-├── docker-version/                        ← Local Docker Compose implementation
-│   ├── README.md                          ← Step-by-step setup walkthrough
-│   ├── docker-compose.yml                 ← The whole stack (Kafka, Connect, Flink, UI)
-│   ├── flink/Dockerfile                   ← Custom Flink image with Kafka SQL connector
-│   ├── connectors/cosmos-source.json      ← Connector config (secrets redacted)
-│   └── flink-sql/orders_window.sql        ← Flink SQL for the windowed aggregation
 │
 ├── confluent-cloud-version/               ← Managed Confluent Cloud implementation
 │   ├── README.md                          ← Setup walkthrough using Azure Marketplace
@@ -88,13 +74,6 @@ cosmos-flink-streaming-lab/
 
 Pick the implementation that matches your situation:
 
-**Use `docker-version/` if you want to:**
-- Understand how Kafka, Connect, and Flink fit together without managed-service abstractions
-- Run everything offline (after initial image pulls) without cloud costs
-- See the actual configuration files and connector JARs that production setups manage for you
-
-Requires Docker Desktop with ~6 GB of memory available, plus an Azure Cosmos DB account (the free tier is sufficient).
-
 **Use `confluent-cloud-version/` if you want to:**
 - Skip local infrastructure entirely
 - See the architecture as it appears in actual production deployments
@@ -107,10 +86,6 @@ Each subfolder has its own README with step-by-step setup. They're independent �
 ---
 
 ## Cost notes
-
-Neither version is free, but both are cheap if you're disciplined about stopping things when you're done.
-
-**Docker version:** $0 for the local infrastructure. Cosmos DB is the only paid component, and the free tier (1000 RU/s, 25 GB) covers everything. Total cost for a focused weekend: $0.
 
 **Confluent Cloud version:** New accounts get $400 of free credits, plus $600 more via Azure Marketplace promo code. A focused weekend of learning uses $5–15. The traps are leaving Flink statements running (~$0.21 per CFU-hour) or forgetting to pause connectors. Set a budget alert.
 
