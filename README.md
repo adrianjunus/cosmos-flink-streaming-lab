@@ -4,7 +4,7 @@
 
 A hands-on exploration of Cosmos DB → Kafka → Flink streaming on Azure, with a focus on the production concerns most reference architectures might skip: schema evolution under compatibility constraints, retention as a recovery-time budget, and replay-from-source recovery.
 
-I worked on this as a hands-on exploration of real-time streaming analytics. Built as a personal learning project to understand the architecture, tradeoffs, and failure modes of production streaming systems.
+I built this up as a hands-on exploration of real-time streaming analytics. Built as a personal learning project to understand the architecture, tradeoffs, and failure modes of production streaming systems.
 
 ---
 
