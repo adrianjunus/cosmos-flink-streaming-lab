@@ -6,8 +6,6 @@ A hands-on exploration of Cosmos DB → Kafka → Flink streaming on Azure, with
 
 I worked on this as a hands-on exploration of real-time streaming analytics. Built as a personal learning project to understand the architecture, tradeoffs, and failure modes of production streaming systems.
 
-- **`confluent-cloud-version/`** — the same architecture on Confluent Cloud's managed Flink and Kafka offerings, hosted on Azure. Closer to production reality. My goal is to best represent what would realistically deploy.
-
 ---
 
 ## Architecture (I used Claude to help with some diagramming here)
