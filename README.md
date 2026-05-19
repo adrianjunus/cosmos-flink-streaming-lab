@@ -2,13 +2,15 @@
 
 ![Validate](https://github.com/adrianjunus/cosmos-flink-streaming-lab/actions/workflows/validate.yml/badge.svg)
 
-I worked on this as a hands-on exploration of real-time streaming analytics on Azure: ingesting Cosmos DB change feed events through Apache Kafka and processing them with Apache Flink. Built as a personal learning project to understand the architecture, tradeoffs, and failure modes of production streaming systems.
+A hands-on exploration of Cosmos DB → Kafka → Flink streaming on Azure, with a focus on the production concerns most reference architectures might skip: schema evolution under compatibility constraints, retention as a recovery-time budget, and replay-from-source recovery.
+
+I worked on this as a hands-on exploration of real-time streaming analytics. Built as a personal learning project to understand the architecture, tradeoffs, and failure modes of production streaming systems.
 
 - **`confluent-cloud-version/`** — the same architecture on Confluent Cloud's managed Flink and Kafka offerings, hosted on Azure. Closer to production reality. My goal is to best represent what would realistically deploy.
 
 ---
 
-## Architecture (I used Clause to help with some diagramming here)
+## Architecture (I used Claude to help with some diagramming here)
 
 ```
    Azure                          Streaming Layer                       Outputs
@@ -45,7 +47,7 @@ Cosmos DB acts as the operational data store. It has a change feed which emits a
 
 **Cosmos change feed as a replayable source of truth.** The decision to use Cosmos was somewhat arbitrary. I wanted to mess around with unstructured data. I was also already familiary with the change feed. The change feed retains a configurable window of every change, which means recovery from downstream errors usually means "fix the code and replay from source," not "manually reconstruct lost data." This makes retention windows — both at Cosmos and in Kafka — a first-class architectural decision rather than a cost-only knob.
 
-I used Clause to help with some diagramming here. The longer-form reasoning for these decisions, plus the operational concerns (failure handling, schema evolution, retention as a recovery-time budget) is in [`docs/architecture.md`](docs/architecture.md).
+I used Claude to help with some diagramming here. The longer-form reasoning for these decisions, plus the operational concerns (failure handling, schema evolution, retention as a recovery-time budget) is in [`docs/architecture.md`](docs/architecture.md).
 
 ---
 
@@ -70,12 +72,6 @@ cosmos-flink-streaming-lab/
 
 ---
 
-## Getting started
-
-Requires an Azure subscription and a Confluent Cloud account. New Confluent Cloud organizations get free trial credits that cover the lab easily.
-
----
-
 ## Cost notes
 
 **Confluent Cloud version:** New accounts get $400 of free credits, plus $600 more via Azure Marketplace promo code. A focused weekend of learning uses $5–15. The traps are leaving Flink statements running (~$0.21 per CFU-hour) or forgetting to pause connectors. Set a budget alert.
@@ -93,6 +89,7 @@ Cosmos DB free tier covers both implementations.
 - **JSON Schema + Confluent Schema Registry** — message format and contract management
 - **Confluent Cloud** (managed version) — Azure-hosted Kafka and Flink as a service
 
+Requires an Azure subscription and a Confluent Cloud account. New Confluent Cloud organizations get free trial credits that cover the lab easily.
 ---
 
 ## What this lab demonstrates
@@ -101,7 +98,7 @@ Beyond getting a streaming pipeline working, the project covers a number of arch
 
 - **Schema evolution under compatibility constraints.** Working through real Schema Registry compatibility errors (`PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL`, `TYPE_NARROWED`) under `BACKWARD` mode, and the relax-evolve-retighten pattern that production teams use for deliberate schema changes.
 
-- **The bronze/silver/DLQ medallion pattern for streaming.** Splitting the pipeline into a permissive ingestion layer, a strictly-typed validated layer, and a dead-letter path for records that fail validation — and why the validation logic typically lives in Flink rather than at the connector.
+- **The bronze/silver/DLQ medallion pattern for streaming.** I did not implement this yet but want to acknowledge the importance of it. Looking to add soon... Splitting the pipeline into a permissive ingestion layer, a strictly-typed validated layer, and a dead-letter path for records that fail validation — and why the validation logic typically lives in Flink rather than at the connector.
 
 - **Retention as a recovery-time budget.** Setting topic and change-feed retention based on a documented "time to detect, diagnose, fix, plus margin" calculation, rather than as a default to be tuned later.
 
